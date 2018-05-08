@@ -1,0 +1,467 @@
+const Hacker = require("../models/challenge");
+const mongodb = require("../mongodb");
+const conn = mongodb.connection;
+const ObjectId = mongodb.ObjectId;
+const moment = require("moment");
+
+module.exports = {
+  readAll: readAll,
+  readById: readById,
+  getByTiers: getByTiers,
+  create: create,
+  update: update,
+  updateNotifications: updateNotifications,
+  delete: _delete,
+  readAllExt: readAllExt,
+  getDailyChallenges: getDailyChallenges,
+  createEmptyDoc: createEmptyDoc,
+  deleteNotification: deleteNotification,
+  getCurrentRangeNotifications: getCurrentRangeNotifications,
+  getDailyChallengesv2: getDailyChallengesv2,
+  getNeedMetNotification: getNeedMetNotification,
+  getDailyPremiumChallenges: getDailyPremiumChallenges,
+  getCurrentChallengesModal: getCurrentChallengesModal
+};
+
+function getCurrentRangeNotifications(currentTime, currentTimePlus15) {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          "notificationTimeRange.notificationStartTime": {
+            $gt: currentTime,
+            $lt: currentTimePlus15
+          }
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+        const challengeIds = [];
+        const challengeIdsAsObject = [];
+        for (let i = 0; i < challenges.length; i++) {
+          challengeIds.push(challenges[i]._id.toString());
+        }
+        for (let i = 0; i < challenges.length; i++) {
+          challengeIdsAsObject.push(challenges[i]._id);
+        }
+        return {
+          challengeIdsAsObject: challengeIdsAsObject,
+          challengeIds: challengeIds,
+          challenges: challenges
+        };
+    });
+}
+
+function readAll() {
+  return conn
+    .db()
+    .collection("challenges")
+    .find()
+    .toArray()
+    .then(challenges => {
+      for (let i = 0; i < challenges.length; i++) {
+        let challenge = challenges[i];
+        challenge._id = challenge._id.toString();
+      }
+      return challenges;
+    });
+}
+
+function getCurrentChallengesModal() {
+  let todayStart = moment().startOf("day");
+  let todayEnd = moment().endOf("day");
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          tier: { $in: ["2", "3"] },
+          isActive: true,
+          startDate: { $lte: new Date(todayStart) },
+          endDate: { $gte: new Date(todayEnd) }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          description: 1,
+          points: 1,
+          canRepeat: 1,
+          withTimes: 1,
+          timeRange: 1,
+          tier: 1,
+          type: 1,
+          startDate: 1,
+          endDate: 1,
+          isActive: 1, 
+          groupName: 1
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+      return challenges;
+    });
+}
+
+function readById(id) {
+  docId = new ObjectId(id);
+  return conn
+    .db()
+    .collection("challenges")
+    .findOne({ _id: docId })
+    .then(challenge => {
+      challenge._id = challenge._id.toString();
+      return challenge;
+    });
+}
+
+function getByTiers(tier) {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          tier: { $in: tier }
+        }
+      },
+      {
+        $lookup: {
+          from: "sponsors",
+          localField: "sponsorId",
+          foreignField: "_id",
+          as: "sponsorId"
+        }
+      },
+      {
+        $unwind: {
+          path: "$sponsorId",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          "sponsorId.firstName": 0,
+          "sponsorId.lastName": 0,
+          "sponsorId.email": 0,
+          "sponsorId.zipCode": 0,
+          "sponsorId.phone": 0,
+          "sponsorId.createDate": 0,
+          "sponsorId.updateDate": 0
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+      for (let i = 0; i < challenges.length; i++) {
+        let challenge = challenges[i];
+        challenge._id = challenge._id.toString();
+      }
+      return challenges;
+    });
+}
+
+function create(model) {
+  if (model.sponsorId) {
+    model.sponsorId = ObjectId(model.sponsorId);
+  }
+  return conn
+    .db()
+    .collection("challenges")
+    .insert(model)
+    .then(result => result.insertedIds[0].toString());
+}
+
+function update(id, doc) {
+  if (doc.sponsorId) {
+    doc.sponsorId = ObjectId(doc.sponsorId);
+  }
+  doc._id = new ObjectId(id);
+  return conn
+    .db()
+    .collection("challenges")
+    .replaceOne({ _id: doc._id }, doc)
+    .then(result => Promise.resolve());
+}
+
+function _delete(id) {
+  docId = new ObjectId(id);
+
+  return conn
+    .db()
+    .collection("challenges")
+    .deleteOne({ _id: docId })
+    .then(result => Promise.resolve());
+}
+
+function readAllExt() {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $lookup: {
+          from: "sponsors",
+          localField: "sponsorId",
+          foreignField: "_id",
+          as: "sponsorId"
+        }
+      },
+      {
+        $unwind: {
+          path: "$sponsorId",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          "sponsorId.firstName": 0,
+          "sponsorId.lastName": 0,
+          "sponsorId.email": 0,
+          "sponsorId.zipCode": 0,
+          "sponsorId.phone": 0,
+          "sponsorId.createDate": 0,
+          "sponsorId.updateDate": 0
+        }
+      }
+    ])
+    .toArray()
+    .then(challengesAgg => {
+      for (let i = 0; i < challengesAgg.length; i++) {
+        !challengesAgg[i].sponsorId
+          ? (challengesAgg[i].sponsorId = "")
+          : (challengesAgg[i].sponsorId._id = challengesAgg[
+              i
+            ].sponsorId._id.toString());
+      }
+      return challengesAgg;
+    });
+}
+
+function getNeedMetNotification(id) {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: { _id: new ObjectId(id) }
+      },
+      {
+        $lookup: {
+          from: "notifications",
+          localField: "notifications.needMet",
+          foreignField: "_id",
+          as: "needMetNotification"
+        }
+      },
+      {
+        $unwind: {
+          path: "$needMetNotification"
+        }
+      },
+      {
+        $project: {
+          needMetNotification: 1,
+
+          _id: 0
+        }
+      },
+      {
+        $replaceRoot: {
+          newRoot: "$needMetNotification"
+        }
+      }
+    ])
+    .next()
+    .then(notification => {
+      return notification;
+    });
+}
+
+function create(model) {
+  if (model.sponsorId) {
+    model.sponsorId = ObjectId(model.sponsorId);
+  }
+  return conn
+    .db()
+    .collection("challenges")
+    .insert(model)
+    .then(result => result.insertedIds[0].toString());
+}
+
+function createEmptyDoc() {
+  const _id = new ObjectId();
+  const createDate = new Date().toISOString();
+  const startDate = new Date(2018, 04, 01, 0, 0, 0, 0).toISOString();
+  const endDate = new Date(2018, 04, 02, 0, 0, 0, 0).toISOString();
+  const doc = {
+    _id: _id,
+    createDate: createDate,
+    startDate: startDate,
+    endDate: endDate
+  };
+  return conn
+    .db()
+    .collection("challenges")
+    .insert(doc)
+    .then(result => result.insertedIds[0].toString());
+}
+
+function update(id, doc) {
+  if (doc.sponsorId) {
+    doc.sponsorId = ObjectId(doc.sponsorId);
+  }
+
+  doc._id = new ObjectId(id);
+  return conn
+    .db()
+    .collection("challenges")
+    .replaceOne({ _id: doc._id }, doc)
+    .then(result => Promise.resolve());
+}
+
+function updateNotifications(id, notifications) {
+  id = new ObjectId(id);
+  for (let k in notifications) {
+    if (notifications[k] && notifications[k] !== "") {
+      notifications[k] = ObjectId(notifications[k]);
+    }
+  }
+
+  return conn
+    .db()
+    .collection("challenges")
+    .updateOne(
+      { _id: id },
+      {
+        $set: {
+          notifications: {
+            need: notifications.need,
+            needMet: notifications.needMet,
+            needUnmet: notifications.needUnmet
+          }
+        }
+      }
+    )
+    .then(result => Promise.resolve());
+}
+
+function deleteNotification(challengeId, type) {
+  challengeId = new ObjectId(challengeId);
+
+  let setter = { $set: {} };
+  setter.$set["notifications." + type] = null;
+  return conn
+    .db()
+    .collection("challenges")
+    .updateOne(
+      { _id: challengeId },
+
+      setter
+    )
+    .then(result => Promise.resolve());
+}
+
+function getDailyChallenges(todayStart, todayEnd) {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          tier: "1",
+          isActive: true,
+          startDate: { $lte: todayStart },
+          endDate: { $gte: todayEnd }
+        }
+      },
+      {
+        $group: {
+          _id: { groupName: "$groupName" },
+          challenges: {
+            $push: {
+              id: "$_id",
+              name: "$name",
+              description: "$description",
+              timeRange: "$timeRange"
+            }
+          }
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+      for (let i = 0; i < challenges.length; i++) {
+        let challenge = challenges[i];
+        challenge._id.groupName = challenge._id.groupName.toString();
+      }
+      return challenges;
+    });
+}
+
+function getDailyChallengesv2(today) {
+  let newToday = new Date(today);
+  let todayStart = newToday.setHours(0, 0, 0, 0);
+  let todayEnd = newToday.setHours(23, 59, 59, 999);
+
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          tier: "1",
+          isActive: true,
+          startDate: { $lte: new Date(todayStart) },
+          endDate: { $gte: new Date(todayEnd) }
+        }
+      },
+      {
+        $group: {
+          _id: "$groupName",
+          challenges: {
+            $push: "$$ROOT"
+          }
+        }
+      },
+      {
+        $project: {
+          challenges: {
+            notifications: 0,
+            createDate: 0,
+            updateDate: 0
+          }
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+      return challenges;
+    });
+}
+
+function getDailyPremiumChallenges(tier, currentTime) {
+  return conn
+    .db()
+    .collection("challenges")
+    .aggregate([
+      {
+        $match: {
+          tier: { $in: tier },
+          isActive: true,
+          "timeRange.startTime": { $lte: currentTime },
+          "timeRange.endTime": { $gte: currentTime }
+        }
+      }
+    ])
+    .toArray()
+    .then(challenges => {
+      return challenges;
+    });
+}
