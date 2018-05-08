@@ -1,0 +1,289 @@
+const responses = require("../models/responses");
+const challengeService = require("../services/challenge.service");
+const apiPrefix = "/api/challenges";
+const moment = require("moment");
+const challengeManager = require("../managers/challenges.manager");
+const time = require("../helpers/time");
+const interactionManager = require("../managers/interaction.manager");
+
+module.exports = {
+  readAll: readAll,
+  readById: readById,
+  getByTiers: getByTiers,
+  create: create,
+  update: update,
+  updateNotifications: updateNotifications,
+  delete: _delete,
+  readAllExt: readAllExt,
+  getDailyChallenges: getDailyChallenges,
+  createEmptyDoc: createEmptyDoc,
+  deleteNotification: deleteNotification,
+  getCurrentChallengesAndStatus: getCurrentChallengesAndStatus,
+  getNeedMetNotification: getNeedMetNotification,
+  getDailyPremiumChallenges: getDailyPremiumChallenges,
+  getCurrentChallengesModal: getCurrentChallengesModal
+};
+
+function readAll(req, res) {
+  challengeService
+    .readAll()
+    .then(challenges => {
+      const responseModel = new responses.ItemsResponse();
+      responseModel.items = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getDailyChallenges(req, res) {
+  let todayStart = moment().startOf("day");
+  let todayEnd = moment().endOf("day");
+
+  req.params.id = process.env.LOGIN_CHALLENGE_ID;
+  interactionManager
+    .createInteractionWithValidation(req, id)
+    .then(response => {
+      console.log(response);
+    })
+    .catch(err => {
+      console.log(err);
+    });
+
+  challengeService
+    .getDailyChallenges(todayStart._d, todayEnd._d)
+    .then(challenges => {
+      const responseModel = new responses.ItemsResponse();
+      responseModel.items = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getCurrentChallengesModal(req, res) {
+  let today = new Date();
+  challengeManager
+    .getCurrentChallengesModal(req.auth.userId, today)
+    .then(challenges => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.item = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function readById(req, res) {
+  challengeService
+    .readById(req.params.id)
+    .then(challenge => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.item = challenge;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getByTiers(req, res) {
+  if (req.query.tier === undefined) {
+    req.query.tier = [];
+  } else if (typeof req.query.tier === "string") {
+    req.query.tier = [req.query.tier];
+  }
+  challengeService
+    .getByTiers(req.query.tier)
+    .then(challenges => {
+      const responseModel = new responses.ItemsResponse();
+      responseModel.items = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function create(req, res) {
+  challengeService
+    .create(req.model)
+    .then(id => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.item = id;
+      responseModel.createDate = req.model.createDate;
+      responseModel.updateDate = req.model.updateDate;
+      res.status(201).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function update(req, res) {
+  req.model.updateDate = new Date();
+  challengeService
+    .update(req.params.id, req.model)
+    .then(challenge => {
+      const responseModel = new responses.SuccessResponse();
+      responseModel.updateDate = req.model.updateDate;
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function _delete(req, res) {
+  challengeService
+    .delete(req.params.id)
+    .then(() => {
+      const responseModel = new responses.SuccessResponse();
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      return res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function readAllExt(req, res) {
+  challengeService
+    .readAllExt()
+    .then(challengesAgg => {
+      const responseModel = new responses.SuccessResponse();
+      responseModel.items = challengesAgg;
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      return res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getCurrentChallengesAndStatus(req, res) {
+  let currentTime = req.params.time;
+
+  req.params.id = process.env.LOGIN_CHALLENGE_ID;
+  interactionManager
+    .createInteractionWithValidation(req)
+    .then(response => {
+      console.log(response);
+    })
+    .catch(err => {
+      console.log(err);
+    });
+
+  challengeManager
+    .getCurrentChallengesAndStatus(req.auth.userId, currentTime)
+    .then(challenges => {
+      const responseModel = new responses.ItemsResponse();
+      responseModel.items = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function createEmptyDoc(req, res) {
+  challengeService
+    .createEmptyDoc()
+    .then(id => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.item = id;
+      res.status(201).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function update(req, res) {
+  req.model.updateDate = new Date();
+  challengeService
+    .update(req.params.id, req.model)
+    .then(challenge => {
+      const responseModel = new responses.SuccessResponse();
+      responseModel.updateDate = req.model.updateDate;
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function updateNotifications(req, res) {
+  challengeService
+    .updateNotifications(req.body._id, req.body.notifications)
+    .then(challenge => {
+      const responseModel = new responses.SuccessResponse();
+
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function deleteNotification(req, res) {
+  challengeService
+    .deleteNotification(req.body.challengeId, req.body.type)
+    .then(challenge => {
+      const responseModel = new responses.SuccessResponse();
+
+      res.status(200).json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getDailyPremiumChallenges(req, res) {
+  if (req.query.tier === undefined) {
+    req.query.tier = [];
+  } else if (typeof req.query.tier === "string") {
+    req.query.tier = [req.query.tier];
+  }
+  let currentTime = moment().format("HHmm");
+  challengeService
+    .getDailyPremiumChallenges(req.query.tier, currentTime)
+    .then(challenges => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.items = challenges;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
+
+function getNeedMetNotification(req, res) {
+  challengeService
+    .getNeedMetNotification(req.params.id)
+    .then(notification => {
+      const responseModel = new responses.ItemResponse();
+      responseModel.item = notification;
+      res.json(responseModel);
+    })
+    .catch(err => {
+      console.log(err);
+      res.status(500).send(new responses.ErrorResponse(err));
+    });
+}
