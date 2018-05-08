@@ -1,0 +1,212 @@
+import Notifier from "../helpers/notifier.js";
+import axiosInstance from "../config/axios.config";
+
+const baseUrl = `${process.env.REACT_APP_BASEPATH}/challenges`;
+
+export function create(challengeData) {
+  const config = {
+    method: "POST",
+    headers: {},
+    data: challengeData
+  };
+  return axiosInstance(baseUrl, config)
+    .then(data => {
+      successNotification();
+      return responseSuccessHandler(data);
+    })
+    .catch(responseErrorNotify);
+}
+
+export function createEmptyDoc() {
+  const config = {
+    method: "POST",
+    headers: {}
+  };
+  return axiosInstance(`${baseUrl}/create-empty-doc`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorNotify);
+}
+
+export function readAll() {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(baseUrl, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function readById(id) {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance
+    .get(`${baseUrl}/${id}`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function getCurrentChallengesModal() {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(`${baseUrl}/get-current-challenges-modal`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function getDailyChallenges() {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(`${baseUrl}/get-daily-challenges`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function update(challengeData) {
+  const config = {
+    method: "PUT",
+    headers: {},
+    data: challengeData
+  };
+  return axiosInstance(`${baseUrl}/${challengeData._id}`, config)
+    .then(response => {
+      successNotification();
+      return responseSuccessHandler(response);
+    })
+    .catch(responseErrorHandler);
+}
+
+export function updateNotifications(updateData) {
+  const config = {
+    method: "PUT",
+    headers: {},
+    data: updateData
+  };
+  return axiosInstance(`${baseUrl}/update-notification-id`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function deleteNotification(notificationData) {
+  const config = {
+    method: "PUT",
+    headers: {},
+    data: notificationData
+  };
+  return axiosInstance(`${baseUrl}/delete-notification`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function getByTiers(tiers) {
+  let queryString = "";
+  function arrayToQuery(element, index) {
+    if (index === 0) {
+      queryString += "?" + "tier=" + element;
+    } else queryString += "&" + "tier=" + element;
+  }
+  tiers.forEach(arrayToQuery);
+
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(baseUrl + "/get-by-tiers" + queryString, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function premiumChallenges(tiers) {
+  let queryString = "";
+  function arrayToQuery(element, index) {
+    if (index === 0) {
+      queryString += "?" + "tier=" + element;
+    } else queryString += "&" + "tier=" + element;
+  }
+  tiers.forEach(arrayToQuery);
+
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(baseUrl + "/premium-challenges" + queryString, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function del(id) {
+  const config = {
+    method: "DELETE",
+    headers: {}
+  };
+
+  return axiosInstance(`${baseUrl}/${id}`, config)
+    .then(data => {
+      Notifier.notify({
+        title: "Challenge Deleted.",
+        autoDismiss: 3,
+        level: "error",
+        position: "tr",
+        dismissible: "button"
+      });
+
+      responseSuccessHandler(data);
+    })
+    .catch(responseErrorHandler);
+}
+
+export function readAllExt() {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(baseUrl + "/ext", config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+export function getNeedMetNotification(id) {
+  const config = {
+    method: "GET",
+    headers: {}
+  };
+  return axiosInstance(`${baseUrl}/${id}/needMet`, config)
+    .then(responseSuccessHandler)
+    .catch(responseErrorHandler);
+}
+
+const responseSuccessHandler = response => {
+  return response.data;
+};
+
+const responseErrorNotify = error => {
+  Notifier.notify({
+    title: "Error occurred when saving your challenge.",
+    autoDismiss: 3,
+    level: "error",
+    position: "tr",
+    dismissible: "button"
+  });
+  console.log(error);
+  return Promise.reject(error);
+};
+
+function successNotification() {
+  Notifier.notify({
+    title: "Challenge successfully saved.",
+    autoDismiss: 3,
+    level: "success",
+    position: "tr",
+    dismissible: "button"
+  });
+}
+
+const responseErrorHandler = error => {
+  return Promise.reject(error);
+};
