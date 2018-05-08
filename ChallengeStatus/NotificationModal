@@ -1,0 +1,110 @@
+import React from "react";
+import { Modal, Button, Row, Col } from "react-bootstrap";
+
+class NotificationModal extends React.PureComponent {
+   constructor(props) {
+      super(props);
+      this.state = {
+         notification: {},
+         show: false,
+         componentRenders: 0
+      };
+
+      this.openModal = this.openModal.bind(this);
+      this.closeModal = this.closeModal.bind(this);
+      this.closeWithButton = this.closeWithButton.bind(this)
+
+      this.defaultNotification = {
+         message: "Great Job! Your Dog is so Happy!",
+         fileUrl: "https://media.giphy.com/media/w8potzTKraA2k/giphy.gif"
+      };
+   }
+
+   componentWillReceiveProps(nextProps, prevState) {
+      if (
+         nextProps.notification !== this.props.notification ||
+         nextProps.show
+      ) {
+         if (nextProps.notification) {
+            this.setState(prevState => {
+               return {
+                  ...prevState,
+                  notification: nextProps.notification
+               };
+            }),
+               this.openModal(nextProps);
+         } else {
+            this.setState(prevState => {
+               return {
+                  ...prevState,
+                  notification: {
+                     message: this.defaultNotification.message,
+                     fileUrl: this.defaultNotification.fileUrl
+                  }
+               };
+            }),
+               this.openModal(nextProps);
+         }
+      }
+   }
+
+   openModal(nextProps) {
+      if (nextProps.show) {
+         this.setState(prevState => {
+            return { ...prevState, show: true };
+         });
+      }
+
+      this.closeModal();
+   }
+
+   closeModal() {
+      this.props.resetShow();
+      window.setTimeout(() => {
+         this.setState(prevState => {
+            return {
+               ...prevState,
+               show: false
+            };
+         });
+      }, 5000);
+   }
+
+   closeWithButton() {
+      this.props.resetShow();
+      this.setState(prevState => {
+         return {
+            ...prevState,
+            show: false
+         };
+      });
+   }
+
+   render() {
+      return (
+         <React.Fragment>
+            <Modal show={this.state.show} onHide={this.closeModal}>
+               <Modal.Header>
+                  <Modal.Title>{this.state.notification.message}</Modal.Title>
+               </Modal.Header>
+               <Modal.Body>
+                  <Row>
+                     <Col md={6} mdOffset={3}>
+                        <img
+                           src={this.state.notification.fileUrl}
+                           className="img-responsive center-block"
+                        />
+                     </Col>
+                  </Row>
+               </Modal.Body>
+               <Modal.Footer>
+                  <Button onClick={this.closeWithButton} bsStyle="primary">
+                     Close
+                  </Button>
+               </Modal.Footer>
+            </Modal>
+         </React.Fragment>
+      );
+   }
+}
+export default NotificationModal;
