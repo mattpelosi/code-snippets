@@ -1,0 +1,239 @@
+import React from "react";
+import * as challengeService from "../services/challenge.service";
+import * as interactionService from "../services/interaction.service";
+import { ProgressBar } from "react-bootstrap";
+import NotificationModal from "./NotificationModal";
+import * as timeFormat from "../helpers/time";
+const moment = require("moment");
+class ChallengesStatus extends React.PureComponent {
+  constructor(props) {
+    super(props);
+    this.state = {
+      status: [],
+      notification: {},
+      showNotificationModal: false
+    };
+    this.createInteraction = this.createInteraction.bind(this);
+    this.todaysChallengeStatus = this.todaysChallengeStatus.bind(this);
+    this.renderNotificationModal = this.renderNotificationModal.bind(this);
+    this.resetShowNotificationModal = this.resetShowNotificationModal.bind(
+      this
+    );
+
+    this.challenges = [];
+    this.interactions = [];
+  }
+
+  componentDidMount() {
+    Promise.all([
+      challengeService.getDailyChallenges(),
+      interactionService.getTodaysInteractions()
+    ]).then(values => {
+      this.challenges = values[0].items;
+      this.interactions = values[1].items;
+      this.todaysChallengeStatus();
+    });
+  }
+
+  createInteraction(challenge, event) {
+    event.preventDefault();
+    const that = this;
+    let interactionPushed = false;
+    interactionService.create(challenge.id).then(data => {
+      const interaction = {
+        _id: { groupName: data.item.challenge.groupName },
+        challenges: [
+          {
+            interactions: [
+              {
+                createDate: data.item.createDate,
+                _id: data.item._id
+              }
+            ],
+            id: data.item.challenge.challengeId,
+            description: data.item.challenge.description,
+            name: data.item.challenge.name,
+            tier: data.item.challenge.tier,
+            isActive: true
+          }
+        ]
+      };
+      if (that.interactions.length === 0 && !interactionPushed) {
+        that.interactions.push(interaction);
+      } else {
+        for (let i = 0; i < that.interactions.length; i++) {
+          if (
+            that.interactions[i]._id.groupName === interaction._id.groupName
+          ) {
+            for (let k = 0; k < that.interactions[i].challenges.length; k++) {
+              if (
+                that.interactions[i].challenges[k].id ===
+                interaction.challenges[0].id
+              ) {
+                that.interactions[i].challenges[k].interactions.push(
+                  interaction.challenges[0].interactions[0]
+                );
+                interactionPushed = true;
+              }
+
+              if (
+                k === that.interactions[i].challenges.length - 1 &&
+                !interactionPushed
+              ) {
+                that.interactions[i].challenges.push(interaction.challenges[0]);
+                interactionPushed = true;
+              }
+            }
+          }
+          if (i === that.interactions.length - 1 && !interactionPushed) {
+            that.interactions.push(interaction);
+            break;
+          }
+        }
+      }
+      this.todaysChallengeStatus();
+      this.renderNotificationModal(challenge);
+      this.props.updatePointsGraph();
+    });
+  }
+
+  todaysChallengeStatus() {
+    const preparedChallenges = prepChallengeStatusCalculation(
+      this.challenges,
+      this.interactions
+    );
+    const challengesWithDailyStatus = calculateChallengeStatus(
+      preparedChallenges
+    );
+    this.setState(prevState => {
+      return {
+        ...prevState,
+        status: challengesWithDailyStatus
+      };
+    });
+
+    function prepChallengeStatusCalculation(challenges, interactions) {
+      const preparedChallenges = challenges.map(challengeGroup => {
+        const matchingInteractionGroup = interactions.filter(
+          interactionGroup => {
+            return (
+              interactionGroup._id.groupName === challengeGroup._id.groupName
+            );
+          }
+        );
+
+    
+
+        if (
+          matchingInteractionGroup &&
+          matchingInteractionGroup.length > 0 &&
+          matchingInteractionGroup[0].challenges
+        ) {
+          const challengeIdsWithInteractions = matchingInteractionGroup[0].challenges.reduce(
+            function(challengeIds, challenge) {
+              if (challenge.interactions && challenge.interactions.length > 0) {
+                challengeIds.push(challenge.id);
+              }
+              return challengeIds;
+            },
+            []
+          );
+
+          challengeGroup.challengeIdsWithInteractions = challengeIdsWithInteractions;
+          return challengeGroup;
+        } else {
+          return challengeGroup;
+        }
+      });
+      return preparedChallenges;
+    }
+    function calculateChallengeStatus(preparedChallenges) {
+      const challengesWithStatusOfCompletion = preparedChallenges.map(
+        challenge => {
+          if (challenge.challengeIdsWithInteractions) {
+            const challengeStatus =
+              100 *
+              (challenge.challengeIdsWithInteractions.length /
+                challenge.challenges.length);
+            challenge.challengeStatus = challengeStatus;
+            return challenge;
+          }
+          return challenge;
+        }
+      );
+      return challengesWithStatusOfCompletion;
+    }
+  }
+
+  renderNotificationModal(challenge) {
+    challengeService.getNeedMetNotification(challenge.id).then(notification => {
+      this.setState(prevState => {
+        return {
+          ...prevState,
+          notification: notification.item,
+          showNotificationModal: true
+        };
+      });
+    });
+  }
+
+  resetShowNotificationModal() {
+    this.setState({
+      showNotificationModal: false
+    });
+  }
+
+  render() {
+    const now = timeFormat.timePartToString(new Date());
+    const challengesStatus = this.state.status.map(group => {
+      return (
+        <React.Fragment key={group._id.groupName}>
+          <div className="row">
+            <div className="col-md-7">
+              {group._id.groupName}
+              <ProgressBar now={group.challengeStatus || 0} bsStyle="info" />
+            </div>
+            <div
+              style={{ padding: 5, paddingLeft: 10, paddingRight: 10 }}
+              className="col-md-5"
+            >
+              {group.challenges.map(eachChallenge => {
+                let startTime = eachChallenge.timeRange.startTime;
+                let endTime = eachChallenge.timeRange.endTime;
+                if (
+                  eachChallenge.timeRange &&
+                  (startTime <= now && endTime >= now)
+                ) {
+                  return (
+                    <button
+                      key={eachChallenge.id}
+                      className="btn btn-primary btn-sm btn-block textOverflow"
+                      onClick={this.createInteraction.bind(this, eachChallenge)}
+                    >
+                      {eachChallenge.name}
+                    </button>
+                  );
+                } else {
+                  return null;
+                }
+              })}
+            </div>
+          </div>
+        </React.Fragment>
+      );
+    });
+
+    return (
+      <React.Fragment>
+        {challengesStatus}
+        <NotificationModal
+          notification={this.state.notification}
+          show={this.state.showNotificationModal}
+          resetShow={this.resetShowNotificationModal}
+        />
+      </React.Fragment>
+    );
+  }
+}
+
+export default ChallengesStatus;
